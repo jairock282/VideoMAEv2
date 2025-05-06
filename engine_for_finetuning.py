@@ -22,6 +22,8 @@ import utils
 
 def train_class_batch(model, samples, target, criterion):
     outputs = model(samples)
+    # print(f"\nINFERENCE: {outputs.shape} = {target.shape}")
+    # print(f"INFERENCE: {outputs[0]} = {target[0]}")
     loss = criterion(outputs, target)
     return loss, outputs
 
@@ -79,6 +81,7 @@ def train_one_epoch(model: torch.nn.Module,
                         "weight_decay"] > 0:
                     param_group["weight_decay"] = wd_schedule_values[it]
 
+        # print(f"\nTRAIN | samples: {len(samples[0][0])} targets: {targets}\n")
         samples = samples.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
 
@@ -86,8 +89,11 @@ def train_one_epoch(model: torch.nn.Module,
             # mixup handle 3th & 4th dimension
             B, C, T, H, W = samples.shape
             samples = samples.view(B, C * T, H, W)
-            samples, targets = mixup_fn(samples, targets)
+            samples, targets = mixup_fn(samples, targets) # Get soft labels
             samples = samples.view(B, C, T, H, W)
+
+        # print(f"\nTRAIN 2 | samples: {samples.shape} targets: {targets.shape}\n")
+        # print(f"soft_labels:\n{targets[0]}")
 
         if loss_scaler is None:
             samples = samples.half()

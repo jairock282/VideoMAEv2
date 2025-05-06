@@ -103,6 +103,7 @@ class VideoClsDataset(Dataset):
             args = self.args
             scale_t = 1
 
+            # print(f"\nGETTING VIDEO {self.mode}\n")
             sample = self.dataset_samples[index]
             # T H W C
             buffer = self.load_video(sample, sample_rate_scale=scale_t)

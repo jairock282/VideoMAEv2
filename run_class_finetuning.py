@@ -318,7 +318,7 @@ def get_args():
         default='Kinetics-400',
         choices=[
             'Kinetics-400', 'Kinetics-600', 'Kinetics-700', 'SSV2', 'UCF101',
-            'HMDB51', 'Diving48', 'Kinetics-710', 'MIT'
+            'HMDB51', 'Diving48', 'Kinetics-710', 'MIT', "MSASL121"
         ],
         type=str,
         help='dataset')
@@ -428,6 +428,16 @@ def main(args, ds_init):
         dataset_val, _ = build_dataset(
             is_train=False, test_mode=False, args=args)
     dataset_test, _ = build_dataset(is_train=False, test_mode=True, args=args)
+    print(f"\nTEST | {dataset_train}")
+    print(dataset_train.dataset_samples[:5])
+    print(dataset_train.label_array[:5])
+    print("\n")
+    # for idx, samples in enumerate(dataset_train):
+    #     print(idx)
+    #     print(len(samples[0]))
+    #     print(samples[1])
+    #     print(samples[2])
+    # exit(0)
 
     num_tasks = utils.get_world_size()
     global_rank = utils.get_rank()
@@ -497,6 +507,12 @@ def main(args, ds_init):
             persistent_workers=True)
     else:
         data_loader_test = None
+
+    # for sample in data_loader_train:
+    #     print(len(sample[0][1])) #sample
+    #     print(sample[1][1]) "class_id
+    #     print("\n")
+    # exit(0)
 
     mixup_fn = None
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
@@ -793,6 +809,7 @@ def main(args, ds_init):
         exit(0)
 
     if args.eval:
+        print("\n\nMODEL TESTING\n\n")
         preds_file = os.path.join(args.output_dir, str(global_rank) + '.txt')
         test_stats = final_test(data_loader_test, model, device, preds_file)
         torch.distributed.barrier()
@@ -925,3 +942,4 @@ if __name__ == '__main__':
     if opts.output_dir:
         Path(opts.output_dir).mkdir(parents=True, exist_ok=True)
     main(opts, ds_init)
+    print("\n\nDONE\n\n")
