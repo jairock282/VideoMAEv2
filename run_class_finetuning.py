@@ -24,6 +24,12 @@ from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.models import create_model
 from timm.utils import ModelEma
+from sklearn.metrics import precision_score, recall_score, f1_score
+import numpy as np
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import Counter
 
 # NOTE: Do not comment `import models`, it is used to register models
 import models  # noqa: F401
@@ -34,6 +40,7 @@ from engine_for_finetuning import (
     merge,
     train_one_epoch,
     validation_one_epoch,
+    get_predictions
 )
 from optim_factory import (
     LayerDecayValueAssigner,
@@ -358,6 +365,8 @@ def get_args():
     parser.add_argument(
         '--start_epoch', default=0, type=int, metavar='N', help='start epoch')
     parser.add_argument(
+        '--get_pred', action='store_true', help='Get predictions')
+    parser.add_argument(
         '--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument(
         '--validation', action='store_true', help='Perform validation only')
@@ -428,16 +437,7 @@ def main(args, ds_init):
         dataset_val, _ = build_dataset(
             is_train=False, test_mode=False, args=args)
     dataset_test, _ = build_dataset(is_train=False, test_mode=True, args=args)
-    print(f"\nTEST | {dataset_train}")
-    print(dataset_train.dataset_samples[:5])
-    print(dataset_train.label_array[:5])
-    print("\n")
-    # for idx, samples in enumerate(dataset_train):
-    #     print(idx)
-    #     print(len(samples[0]))
-    #     print(samples[1])
-    #     print(samples[2])
-    # exit(0)
+    print(f"\nTEST | {len(dataset_train)}")
 
     num_tasks = utils.get_world_size()
     global_rank = utils.get_rank()
@@ -497,6 +497,7 @@ def main(args, ds_init):
         data_loader_val = None
 
     if dataset_test is not None:
+        print(f"TEST | {len(dataset_test)}")
         data_loader_test = torch.utils.data.DataLoader(
             dataset_test,
             sampler=sampler_test,
@@ -806,6 +807,50 @@ def main(args, ds_init):
         print(
             f"{len(dataset_val)} val images: Top-1 {test_stats['acc1']:.2f}%, Top-5 {test_stats['acc5']:.2f}%, loss {test_stats['loss']:.4f}"
         )
+        exit(0)
+
+    if args.get_pred:
+        print("\n\nGET PREDS\n\n")
+        preds_file = os.path.join(args.output_dir, str(global_rank) + '.txt')
+        targets, predictions = get_predictions(data_loader_test, model, device)
+        print(f"GT: {targets[:10]}")
+        print(f"Pred: {predictions[:10]}")
+
+        precision = precision_score(targets, predictions, average='macro')
+        recall = recall_score(targets, predictions, average='macro')
+        f1 = f1_score(targets, predictions, average='macro')
+
+        print(f"Macro Precision: {precision:.4f}")
+        print(f"Macro Recall:    {recall:.4f}")
+        print(f"Macro F1 Score:  {f1:.4f}")
+
+        # Step 1: Get top 11 most frequent classes from ground truth
+        target_counts = Counter(predictions)
+        top_11_classes = [cls for cls, _ in target_counts.most_common(11)]
+
+        # Step 2: Filter targets and predictions to include only top 11
+        filtered_targets = []
+        filtered_predictions = []
+
+        for t, p in zip(targets, predictions):
+            if t in top_11_classes:
+                filtered_targets.append(t)
+                filtered_predictions.append(p)
+
+        # Step 3: Compute confusion matrix for top 11
+        cm = confusion_matrix(filtered_targets, filtered_predictions,
+                              labels=top_11_classes)
+
+        # Step 4: Plot confusion matrix
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=top_11_classes, yticklabels=top_11_classes)
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix (Top 11 Classes)')
+        plt.tight_layout()
+        plt.show()
+
         exit(0)
 
     if args.eval:

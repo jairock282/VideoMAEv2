@@ -253,6 +253,7 @@ def final_test(data_loader, model, device, file):
                 str(int(split_nb[i].cpu().numpy())))
             final_result.append(string)
 
+        print(f"\nTEST | output:{output[0].shape} target: {target[0].shape}\n")
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
         batch_size = images.shape[0]
@@ -276,6 +277,31 @@ def final_test(data_loader, model, device, file):
             losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+@torch.no_grad()
+def get_predictions(data_loader, model, device):
+    model.eval()
+
+    all_targets = []
+    all_predictions = []
+
+    metric_logger = utils.MetricLogger(delimiter="  ")
+    header = 'Test:'
+    for batch in metric_logger.log_every(data_loader, 10, header):
+        images = batch[0].to(device, non_blocking=True)
+        targets = batch[1].to(device, non_blocking=True)
+
+        with torch.cuda.amp.autocast():
+            outputs = model(images)
+
+        _, preds = torch.max(outputs, dim=1)
+
+        all_targets.extend(targets.cpu().tolist())
+        all_predictions.extend(preds.cpu().tolist())
+
+    return all_targets[:372], all_predictions[:372]
+
 
 
 def merge(eval_path, num_tasks, method='prob'):
